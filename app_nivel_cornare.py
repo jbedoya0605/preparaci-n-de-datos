@@ -8,7 +8,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ------------------------------------------------------------------
-# Configuración y Metadatos de la Estación 28
+# Configuración y Metadatos de la Estación 28 (San Carlos)
 # ------------------------------------------------------------------
 CODIGO_ESTACION = "28"
 NOMBRE_ESTACION = "Puente Entrada San Carlos"
@@ -28,7 +28,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# Consulta a la API
+# Función de Consulta a la API
 # ------------------------------------------------------------------
 def obtener_serie_nivel(codigo_estacion, desde, hasta, calidad=1, timeout=30):
     url = f"{API_BASE_URL}/{codigo_estacion}/nivel"
@@ -42,6 +42,7 @@ def obtener_serie_nivel(codigo_estacion, desde, hasta, calidad=1, timeout=30):
         if resp.status_code == 200:
             return resp.json(), None
         
+        # Respaldo sin filtros si la API falla con parámetros
         resp_fallback = requests.get(url, headers=headers, timeout=timeout, verify=False)
         if resp_fallback.status_code == 200:
             return resp_fallback.json(), None
@@ -51,7 +52,7 @@ def obtener_serie_nivel(codigo_estacion, desde, hasta, calidad=1, timeout=30):
         return None, f"Error de red: {e}"
 
 # ------------------------------------------------------------------
-# Sidebar
+# Sidebar — Parámetros de Selección
 # ------------------------------------------------------------------
 st.sidebar.header("📍 Estación Seleccionada")
 NOMBRE_ESTUDIANTE = st.sidebar.text_input("Estudiante", "Juan David Bedoya Hernández")
@@ -74,14 +75,14 @@ desde_str = desde_input.strftime("%Y-%m-%d")
 hasta_str = hasta_input.strftime("%Y-%m-%d")
 
 # ------------------------------------------------------------------
-# Encabezado Principal
+# Encabezado Principal y Ficha Técnica
 # ------------------------------------------------------------------
 st.title(f"🌊 Monitoreo en Tiempo Real — Estación {CODIGO_ESTACION}")
 st.caption(f"Estudiante: **{NOMBRE_ESTUDIANTE}** · Sistema MARCO — CORNARE")
 
 col_info1, col_info2, col_info3 = st.columns(3)
 with col_info1:
-    st.info(f"📍 **Estación:** {NOMBRE_ESTUDIANTE}\n\n🌊 **Corriente:** {CORRIENTE}")
+    st.info(f"📍 **Estación:** {NOMBRE_ESTACION}\n\n🌊 **Corriente:** {CORRIENTE}")
 with col_info2:
     st.info(f"🏛️ **Municipio:** {MUNICIPIO}\n\n⚙️ **Tipo:** {TIPO_ESTACION}")
 with col_info3:
@@ -90,7 +91,7 @@ with col_info3:
 st.write("---")
 
 # ------------------------------------------------------------------
-# Procesamiento de Datos y Métricas Estadísticas
+# Procesamiento de Datos
 # ------------------------------------------------------------------
 datos, error = obtener_serie_nivel(CODIGO_ESTACION, desde_str, hasta_str)
 
@@ -114,7 +115,7 @@ else:
             df[col_valor] = pd.to_numeric(df[col_valor], errors="coerce")
             df = df.dropna(subset=[col_fecha, col_valor]).sort_values(col_fecha)
 
-            # CORRECCIÓN DEL ERROR DE COMPARACIÓN DE TIPOS DATETIME
+            # CORRECCIÓN DE TIPO: Convertir fecha del selector a Timestamp de Pandas
             f_inicio = pd.to_datetime(desde_input)
             f_fin = pd.to_datetime(hasta_input) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
             
@@ -122,10 +123,10 @@ else:
             df_filtrado = df.loc[mask].copy()
 
             if df_filtrado.empty:
-                st.warning("No hay registros en las fechas exactas seleccionadas. Mostrando la serie general disponible:")
+                st.warning("No hay registros en el rango exacto. Mostrando la serie general disponible:")
                 df_filtrado = df.copy()
 
-            # --- CÁLCULOS ESTADÍSTICOS ---
+            # CÁLCULOS ESTADÍSTICOS Y CÁLCULO DE MAYORES SUBIDAS
             df_filtrado["diferencia_nivel"] = df_filtrado[col_valor].diff()
             
             lecturas_totales = len(df_filtrado)
@@ -140,7 +141,7 @@ else:
             idx_max_subida = df_filtrado["diferencia_nivel"].idxmax()
             fecha_max_subida = df_filtrado.loc[idx_max_subida, col_fecha] if pd.notnull(idx_max_subida) else "N/A"
 
-            # --- PANEL DE MÉTRICAS PRIMARIAS ---
+            # MÉTRICAS Nivel 1
             st.subheader("📊 Indicadores Principales del Cauce")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Lecturas Recibidas", f"{lecturas_totales}")
@@ -148,15 +149,15 @@ else:
             m3.metric("Nivel Promedio", f"{nivel_prom:.1f} cm")
             m4.metric("Nivel Máximo Registrado", f"{nivel_max:.1f} cm")
 
-            # --- PANEL DE ESTADÍSTICAS AVANZADAS ---
+            # MÉTRICAS Nivel 2 (Estadísticas e Hidrología)
             st.subheader("📈 Análisis Estadístico e Hidrológico")
             e1, e2, e3, e4 = st.columns(4)
             e1.metric("Nivel Mínimo", f"{nivel_min:.1f} cm")
-            e2.metric("Desviación Estándar (Variabilidad)", f"±{desv_est:.2f} cm")
+            e2.metric("Desviación Estándar", f"±{desv_est:.2f} cm")
             e3.metric("Percentil 90 (Nivel Alto)", f"{p90:.1f} cm")
-            e4.metric("Mayor Creciente (Pico a Pico)", f"+{max_subida:.1f} cm" if pd.notnull(max_subida) else "0 cm")
+            e4.metric("Mayor Creciente (Subida)", f"+{max_subida:.1f} cm" if pd.notnull(max_subida) else "0 cm")
 
-            # --- GRÁFICOS VISUALES ---
+            # GRÁFICOS
             st.write("---")
             st.subheader("📉 Visualización Temporal de la Estación")
             t1, t2 = st.tabs(["Comportamiento Continuo", "Variaciones Bruscas (Crecientes)"])
@@ -165,24 +166,24 @@ else:
                 st.line_chart(df_filtrado.set_index(col_fecha)[col_valor])
             
             with t2:
-                st.caption("Muestra las variaciones positivas/negativas de nivel entre lecturas consecutivas.")
+                st.caption("Muestra las variaciones positivas/negativas entre lecturas consecutivas.")
                 st.bar_chart(df_filtrado.set_index(col_fecha)["diferencia_nivel"])
 
-            # --- UBICACIÓN ---
+            # MAPA
             st.subheader("🗺️ Ubicación de la Estación Hidrometeorológica")
             st.map(pd.DataFrame({"lat": [LAT_SAN_CARLOS], "lon": [LON_SAN_CARLOS]}), zoom=12)
 
-            # --- TABLA Y DESCARGA ---
+            # DESCARGA
             with st.expander("📄 Ver Matriz de Datos y Descargar CSV"):
                 st.dataframe(df_filtrado, use_container_width=True)
                 csv = df_filtrado.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="⬇️ Descargar Reporte Completo en CSV",
                     data=csv,
-                    file_name=f"reporte_estacion28_sancarlos.csv",
+                    file_name="reporte_estacion28_sancarlos.csv",
                     mime="text/csv"
                 )
         else:
-            st.warning(f"No se detectaron los nombres de columna esperados. Recibidos: {list(df.columns)}")
+            st.warning(f"Estructura de columnas no reconocida: {list(df.columns)}")
     else:
-        st.error("No se devolvieron datos desde el servidor.")
+        st.error("No se recibieron registros para la estación 28.")
