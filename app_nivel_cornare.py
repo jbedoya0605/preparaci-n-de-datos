@@ -116,15 +116,16 @@ else:
             df = df.dropna(subset=[col_fecha, col_valor]).sort_values(col_fecha)
 
             # CORRECCIÓN DE TIPO: Convertir fecha del selector a Timestamp de Pandas
-            f_inicio = pd.to_datetime(desde_input)
-            f_fin = pd.to_datetime(hasta_input) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-            
-            mask = (df[col_fecha] >= f_inicio) & (df[col_fecha] <= f_fin)
-            df_filtrado = df.loc[mask].copy()
+           # Convertir columna a datetime y remover la zona horaria si la tiene
+df[col_fecha] = pd.to_datetime(df[col_fecha], errors="coerce").dt.tz_localize(None)
 
-            if df_filtrado.empty:
-                st.warning("No hay registros en el rango exacto. Mostrando la serie general disponible:")
-                df_filtrado = df.copy()
+# Convertir las entradas del selector de fecha a Pandas Timestamp
+f_inicio = pd.to_datetime(desde_input)
+f_fin = pd.to_datetime(hasta_input) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+
+# Máscara de comparación compatible
+mask = (df[col_fecha] >= f_inicio) & (df[col_fecha] <= f_fin)
+df_filtrado = df.loc[mask].copy()
 
             # CÁLCULOS ESTADÍSTICOS Y CÁLCULO DE MAYORES SUBIDAS
             df_filtrado["diferencia_nivel"] = df_filtrado[col_valor].diff()
